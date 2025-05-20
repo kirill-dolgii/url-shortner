@@ -5,8 +5,12 @@ import (
 	"log/slog"
 	"os"
 
+	// "github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/kirill-dolgii/url-shortner/internal/config/appconfig"
 	"github.com/kirill-dolgii/url-shortner/internal/config/dbconfig"
+	mw "github.com/kirill-dolgii/url-shortner/internal/http-server/middleware/logger"
 	"github.com/kirill-dolgii/url-shortner/internal/lib/logger/sl"
 	"github.com/kirill-dolgii/url-shortner/internal/storage/postgres"
 	"github.com/phsym/console-slog"
@@ -45,7 +49,16 @@ func main() {
 		logger.Error("error occurred", sl.Err(err))
 	}
 
+	router := chi.NewRouter()
+
+	// middleware
+	router.Use(middleware.RequestID)
+	router.Use(mw.New(logger))
+	router.Use(middleware.Recoverer)
+	router.Use(middleware.URLFormat)
+
 	// start server
+
 }
 
 func setupLogger(env string) (*slog.Logger, error) {

@@ -52,9 +52,21 @@ func (s *Storage) GetUrlByAlias(alias string) (models.Url, error) {
 	err := s.db.First(&url, "alias = ?", alias).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.Url{}, storage.ErrUrlNotFound
+			return models.Url{}, storage.ErrNotFound
 		}
 		return models.Url{}, fmt.Errorf("%s: %w", op, err)
 	}
 	return url, nil
+}
+
+func (s *Storage) DeleteUrl(alias string) error {
+	const op = "storage.postgres.Storage.DeleteUrl"
+	res := s.db.Where("alias = ?", alias).Delete(&models.Url{})
+	if res.Error != nil {
+		return fmt.Errorf("%s: %w", op, res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return storage.ErrNotFound
+	}
+	return nil
 }
