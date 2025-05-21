@@ -12,6 +12,8 @@ import (
 type Config struct {
 	Name        string `yaml:"env" env-default:"local"`
 	StoragePath string `yaml:"storage_path" env-required:"true"`
+	Retries     int    `yaml:"retries" env-default:5`
+	AppSecret   string
 	HttpConfig  HttpConfig
 }
 
@@ -36,6 +38,8 @@ func MustLoad() *Config {
 	if err := cleanenv.ReadConfig(configPath, &config); err != nil {
 		log.Fatalf("can't read config %s", err)
 	}
+
+	config.AppSecret = os.Getenv("APP_SECRET")
 
 	return &config
 }

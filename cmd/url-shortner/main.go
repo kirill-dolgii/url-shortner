@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"net/http"
@@ -9,11 +10,15 @@ import (
 	// "github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/kirill-dolgii/url-shortner/internal/clients/sso/grpc"
 	"github.com/kirill-dolgii/url-shortner/internal/config/appconfig"
 	"github.com/kirill-dolgii/url-shortner/internal/config/dbconfig"
+	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/login"
 	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/redirect"
+	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/register"
 	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/save"
 	mwLogger "github.com/kirill-dolgii/url-shortner/internal/http-server/middleware/logger"
+	mwLogin "github.com/kirill-dolgii/url-shortner/internal/http-server/middleware/login"
 	"github.com/kirill-dolgii/url-shortner/internal/lib/logger/sl"
 	"github.com/kirill-dolgii/url-shortner/internal/storage/postgres"
 	"github.com/phsym/console-slog"
@@ -60,8 +65,16 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	router.Post("/url", save.New(logger, st))
-	router.Post("/{alias}", redirect.New(logger, st))
+	authClient, _ := grpc.New(context.Background(), logger, "localhost:50051", config.HttpConfig.Timeout, config.Retries)
+	router.Post("/login", login.New(authClient))
+	router.Post("/register", register.New(authClient))
+
+	router.Group(func(r chi.Router) {
+		r.Use(mwLogin.AuthMiddleware(config.AppSecret))
+		r.Post("/url", save.New(logger, st))
+		r.Post("/{alias}", redirect.New(logger, st))
+	})
+
 	logger.Info("starting server", slog.String("address", config.HttpConfig.Address))
 
 	// start server
