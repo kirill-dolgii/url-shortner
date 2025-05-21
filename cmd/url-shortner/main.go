@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 
 	// "github.com/go-chi/chi/middleware"
@@ -10,7 +11,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/kirill-dolgii/url-shortner/internal/config/appconfig"
 	"github.com/kirill-dolgii/url-shortner/internal/config/dbconfig"
-	mw "github.com/kirill-dolgii/url-shortner/internal/http-server/middleware/logger"
+	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/redirect"
+	"github.com/kirill-dolgii/url-shortner/internal/http-server/handlers/save"
+	mwLogger "github.com/kirill-dolgii/url-shortner/internal/http-server/middleware/logger"
 	"github.com/kirill-dolgii/url-shortner/internal/lib/logger/sl"
 	"github.com/kirill-dolgii/url-shortner/internal/storage/postgres"
 	"github.com/phsym/console-slog"
@@ -39,7 +42,7 @@ func main() {
 	}
 	logger.Info("db config initialized")
 
-	_, err = postgres.InitDB(dbConfig)
+	st, err := postgres.InitDB(dbConfig)
 	if err != nil {
 		logger.Error("db connection failed", sl.Err(err))
 	}
@@ -53,12 +56,26 @@ func main() {
 
 	// middleware
 	router.Use(middleware.RequestID)
-	router.Use(mw.New(logger))
+	router.Use(mwLogger.New(logger))
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
 
-	// start server
+	router.Post("/url", save.New(logger, st))
+	router.Post("/{alias}", redirect.New(logger, st))
+	logger.Info("starting server", slog.String("address", config.HttpConfig.Address))
 
+	// start server
+	srv := &http.Server{
+		Addr:         config.HttpConfig.Address,
+		Handler:      router,
+		ReadTimeout:  config.HttpConfig.Timeout,
+		WriteTimeout: config.HttpConfig.Timeout,
+		IdleTimeout:  config.HttpConfig.IdleTimeout,
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
+		logger.Error("server start failed", sl.Err(err))
+	}
 }
 
 func setupLogger(env string) (*slog.Logger, error) {
